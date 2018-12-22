@@ -1,0 +1,6 @@
+FROM alpine
+RUN adduser -D -s /bin/sh user
+RUN apk add --no-cache ca-certificates curl git groff httpie jq py3-pip openssh-client tmux vim \
+    && pip3 install awscli
+USER user
+WORKDIR /home/user
