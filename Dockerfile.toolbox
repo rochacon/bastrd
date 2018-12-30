@@ -1,6 +1,15 @@
 FROM alpine
 RUN adduser -D -s /bin/sh user
 RUN apk add --no-cache ca-certificates curl git groff httpie jq py3-pip openssh-client tmux vim \
-    && pip3 install awscli
+    && pip3 install awscli \
+    && wget https://releases.hashicorp.com/terraform/0.11.11/terraform_0.11.11_linux_amd64.zip \
+    && unzip terraform_0.11.11_linux_amd64.zip \
+    && mv -v terraform /usr/local/bin/ \
+    && wget -O /usr/local/bin/kops https://github.com/kubernetes/kops/releases/download/1.10.1/kops-linux-amd64 \
+    && chmod +x /usr/local/bin/kops \
+    && wget -O- https://dl.k8s.io/v1.10.12/kubernetes-client-linux-amd64.tar.gz | tar xz --strip-components 3 kubernetes/client/bin/kubectl \
+    && mv -v kubectl /usr/local/bin/kubectl \
+    && wget -O/usr/local/bin/aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.3.0/heptio-authenticator-aws_0.3.0_linux_amd64 \
+    && chmod +x /usr/local/bin/aws-iam-authenticator
 USER user
 WORKDIR /home/user
