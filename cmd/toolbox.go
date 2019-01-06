@@ -197,12 +197,11 @@ func copyCredentialsToContainer(username string, token *sts.Credentials) error {
 	// XXX(rochacon) can't copy as normal file since the target is the tmpfs mount
 	cmd := exec.Command(DOCKER, "container", "exec", "-i", username, "tar", "vxC", "/home/"+username+"/.aws/")
 	cmd.Stdin = tarBuf
-	err = cmd.Run()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		out, _ := cmd.CombinedOutput()
-		err = fmt.Errorf("%s: %s", err, out)
+		return fmt.Errorf("%s: %s", err, out)
 	}
-	return err
+	return nil
 }
 
 // getUserSessionToken creates a temporary Access Key to validate an user's MFA and retrieve a session token
