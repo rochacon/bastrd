@@ -113,6 +113,9 @@ func ensureContainer(username, image, command string) error {
 	if strings.TrimSpace(string(containerID)) != "" {
 		return nil
 	}
+	// setup data directory for persistent storage
+	os.MkdirAll(filepath.Join(usr.HomeDir(), "data"), 0750)
+	// create container
 	createArgs := []string{
 		"container",
 		"create",
@@ -135,6 +138,7 @@ func ensureContainer(username, image, command string) error {
 		"--env=USER=" + usr.Username,
 		fmt.Sprintf("--mount=type=bind,source=/etc/group,destination=/etc/group,bind-propagation=rprivate,readonly"),
 		fmt.Sprintf("--mount=type=bind,source=/etc/passwd,destination=/etc/passwd,bind-propagation=rprivate,readonly"),
+		fmt.Sprintf("--mount=type=bind,source=%s/data,destination=%s/data,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
 		fmt.Sprintf("--mount=type=tmpfs,destination=%s,tmpfs-size=8192", filepath.Join(usr.HomeDir(), ".aws")),
 		"--user", fmt.Sprintf("%d", usr.Uid()),
 		"--workdir", usr.HomeDir(),
