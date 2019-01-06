@@ -8,9 +8,12 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/rochacon/bastrd/pkg/user"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -69,26 +72,23 @@ func toolboxSessionMain(ctx *cli.Context) (err error) {
 	if username == "" {
 		return fmt.Errorf("username argument is required.")
 	}
-
 	mfaToken := ctx.String("token")
 	sessionToken, err := getUserSessionToken(username, mfaToken, duration)
 	if err != nil {
 		return fmt.Errorf("error creating user %q session access keys: %s", username, err)
 	}
-
 	log.Println("Opening session")
 	err = ensureContainer(username, image, sshArgs)
 	if err != nil {
 		return fmt.Errorf("error opening session for user %q: %s", username, err)
 	}
-
 	err = copyCredentialsToContainer(username, sessionToken)
 	if err != nil {
 		return fmt.Errorf("failed to copy credentials into session container for user %q: %s", username, err)
 	}
 	err = attachToContainer(username)
 	if err != nil {
-		return fmt.Errorf("failed to copy credentials into session container for user %q: %s", username, err)
+		return fmt.Errorf("failed to attach to session container for user %q: %s", username, err)
 	}
 	return err
 }
@@ -104,7 +104,8 @@ func attachToContainer(username string) error {
 
 // ensureContainer ensure that user's toolbox container exists
 func ensureContainer(username, image, command string) error {
-	containerID, err := exec.Command(DOCKER, "container", "ls", "--quiet", "--filter", "name="+username).Output()
+	usr := &user.User{Username: username}
+	containerID, err := exec.Command(DOCKER, "container", "ls", "--quiet", "--filter", "name="+usr.Username).Output()
 	if err != nil {
 		return fmt.Errorf("failed to check if container already running: %s", err)
 	}
@@ -115,7 +116,7 @@ func ensureContainer(username, image, command string) error {
 	createArgs := []string{
 		"container",
 		"create",
-		"--name", username,
+		"--name", usr.Username,
 		"--interactive",
 		"--rm",
 		"--tty",
@@ -130,7 +131,10 @@ func ensureContainer(username, image, command string) error {
 		"--cap-drop=SETPCAP",
 		"--cap-drop=SETUID",
 		"--cap-drop=SYS_CHROOT",
-		"--mount=type=tmpfs,destination=/home/user/.aws,tmpfs-size=8192",
+		"--env=HOME=" + usr.HomeDir(),
+		fmt.Sprintf("--mount=type=tmpfs,destination=%s,tmpfs-size=8192", filepath.Join(usr.HomeDir(), ".aws")),
+		"--user", fmt.Sprintf("%d", usr.Uid()),
+		"--workdir", usr.HomeDir(),
 	}
 	sshAuthSock := os.Getenv("SSH_AUTH_SOCK")
 	if sshAuthSock != "" {
@@ -150,14 +154,14 @@ func ensureContainer(username, image, command string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create container: %s", err)
 	}
-	cmd = exec.Command(DOCKER, "container", "start", username)
+	cmd = exec.Command(DOCKER, "container", "start", usr.Username)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
 }
 
 // copyCredentialsToContainer renders the awsCredentials template as
-// /home/user/.aws/credentials file inside the toolbox
+// /home/username/.aws/credentials file inside the toolbox
 func copyCredentialsToContainer(username string, token *sts.Credentials) error {
 	content := &bytes.Buffer{}
 	err := awsCredentials.Execute(content, struct {
@@ -188,7 +192,7 @@ func copyCredentialsToContainer(username string, token *sts.Credentials) error {
 		return err
 	}
 	// XXX(rochacon) can't copy as normal file since the target is the tmpfs mount
-	cmd := exec.Command(DOCKER, "container", "exec", "-i", username, "tar", "vxC", "/home/user/.aws/")
+	cmd := exec.Command(DOCKER, "container", "exec", "-i", username, "tar", "vxC", "/home/"+username+"/.aws/")
 	cmd.Stdin = tarBuf
 	err = cmd.Run()
 	if err != nil {
