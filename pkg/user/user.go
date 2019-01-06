@@ -1,15 +1,17 @@
 package user
 
 import (
+	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os/exec"
 	osuser "os/user"
+	"path/filepath"
 )
 
 // User represents a mirrored user between AWS IAM and the local system
 type User struct {
-	ARN      string
 	Groups   []*Group
 	Username string
 }
@@ -19,9 +21,19 @@ func (u *User) Ensure(sandboxed bool) error {
 	return ensureUser(u.Username, sandboxed)
 }
 
+// HomeDir returns the user's home directory
+func (u User) HomeDir() string {
+	return filepath.Join("/home", u.Username)
+}
+
 // Remove removes an user from the system
 func (u *User) Remove() error {
 	return exec.Command("/usr/sbin/userdel", "--remove", u.Username).Run()
+}
+
+// Uid returns the user unique id
+func (u User) Uid() uint16 {
+	return uidFromString(u.Username)
 }
 
 // ensureUser add an user in the system idempotently
@@ -42,9 +54,12 @@ func userAdd(username string, sandboxed bool) error {
 	if !sandboxed {
 		shell = "/bin/bash"
 	}
+	uid := fmt.Sprintf("%d", uidFromString(username))
 	cmd := exec.Command(
 		"/usr/sbin/useradd",
 		"-m",
+		"-u", uid,
+		"-U",
 		"-G", "docker",
 		"-s", shell,
 		"-c", "bastrd managed user",
@@ -63,4 +78,12 @@ func userAdd(username string, sandboxed bool) error {
 func userExists(username string) bool {
 	_, err := osuser.Lookup(username)
 	return err == nil
+}
+
+// uidFromString Converts an string into an uid
+func uidFromString(awsID string) uint16 {
+	sha := sha1.Sum([]byte(awsID))
+	last2 := sha[len(sha)-2:]
+	n := binary.LittleEndian.Uint16(last2)
+	return 2000 + (n / 2)
 }
