@@ -20,6 +20,7 @@ func main() {
 	app.Version = fmt.Sprintf("%s %s", VERSION, runtime.Version())
 	app.Commands = []cli.Command{
 		cmd.AuthorizedKeys,
+		cmd.PAM,
 		cmd.Sync,
 		cmd.Toolbox,
 	}

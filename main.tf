@@ -41,6 +41,8 @@ provider "aws" {
   region = "${var.region}"
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_ami" "coreos" {
   most_recent = true
 
@@ -166,35 +168,21 @@ data "template_file" "bastrd_policy" {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "iamRO",
+      "Sid": "iam",
       "Effect": "Allow",
       "Action": [
         "iam:GetGroup",
         "iam:GetSSHPublicKey",
+        "iam:ListAccessKeys",
         "iam:ListGroupsForUser",
         "iam:ListSSHPublicKeys",
-        "sts:AssumeRole",
-        "sts:GetCallerIdentity",
-        "sts:GetSessionToken"
+        "sts:GetCallerIdentity"
       ],
       "Resource": ["*"]
-    },
-    {
-      "Sid": "iamRW",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateAccessKey",
-        "iam:DeleteAccessKey"
-      ],
-      "Resource": $${users_arns}
     }
   ]
 }
 EOF
-
-  vars {
-    users_arns = "${jsonencode(data.aws_iam_user.users.*.arn)}"
-  }
 }
 
 resource "aws_iam_instance_profile" "bastrd" {

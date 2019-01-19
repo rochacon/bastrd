@@ -2,7 +2,9 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-
+    "${data.ignition_file.pam_sshd.id}",
+    "${data.ignition_file.pam_sudo.id}",
+    "${data.ignition_file.sudoers.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -49,16 +51,20 @@ data "ignition_file" "sshd_config" {
 
   content {
     content = <<EOF
-AuthenticationMethods publickey
+AllowAgentForwarding yes
+AllowGroups ${var.ssh_group_name}
+AllowStreamLocalForwarding no
+AllowTcpForwarding no
+AuthenticationMethods publickey,keyboard-interactive:pam
 AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes
-ClientAliveInterval 180
+ClientAliveInterval 30
+MaxAuthTries 3
 PermitEmptyPasswords no
 PermitRootLogin no
-PrintLastLog no # handled by PAM
-PrintMotd no # handled by PAM
-Subsystem sftp internal-sftp
+PrintLastLog yes
+PrintMotd no
 UseDNS no
 UsePAM yes
 EOF
@@ -111,4 +117,72 @@ ExecStart=/opt/bin/bastrd sync --interval=1m --groups=${var.ssh_group_name}
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+// bastrd integration with pam for password check against AWS IAM
+data "ignition_file" "pam_sshd" {
+  filesystem = "root"
+  path       = "/etc/pam.d/sshd"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+auth  sufficient                  pam_exec.so expose_authtok quiet stdout /opt/bin/bastrd pam
+auth  [success=1 default=ignore]  pam_unix.so nullok_secure
+auth  requisite                   pam_deny.so
+auth  required                    pam_permit.so
+
+account   required    pam_unix.so
+account   optional    pam_permit.so
+
+session   required    pam_limits.so
+session   required    pam_env.so
+session   required    pam_unix.so
+session   optional    pam_permit.so
+-session  optional    pam_systemd.so
+EOF
+  }
+}
+
+data "ignition_file" "pam_sudo" {
+  filesystem = "root"
+  path       = "/etc/pam.d/sudo"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+auth  sufficient                  pam_exec.so expose_authtok quiet stdout /opt/bin/bastrd pam --skip-credential-update
+auth  [success=1 default=ignore]  pam_unix.so nullok_secure
+auth  requisite                   pam_deny.so
+auth  required                    pam_permit.so
+
+account   required    pam_unix.so
+account   optional    pam_permit.so
+
+session   required    pam_limits.so
+session   required    pam_env.so
+session   required    pam_unix.so
+session   optional    pam_permit.so
+-session  optional    pam_systemd.so
+EOF
+  }
+}
+
+data "ignition_file" "sudoers" {
+  filesystem = "root"
+  path       = "/etc/sudoers.d/default"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+## Based on https://github.com/coreos/baselayout/blob/master/baselayout/sudoers
+## Pass LESSCHARSET through for systemd commands run through sudo that call less.
+## See https://github.com/coreos/bugs/issues/365.
+Defaults env_keep += "LESSCHARSET"
+
+## enable root and ${var.ssh_group_name} group
+root ALL=(ALL) ALL
+%${var.ssh_group_name} ALL=(ALL) ALL
+EOF
+  }
 }

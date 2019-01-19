@@ -16,12 +16,21 @@ import (
 	"github.com/urfave/cli"
 )
 
+var (
+	defaultAdditionalGroups = cli.StringSlice([]string{"docker"})
+)
+
 var Sync = cli.Command{
 	Name:    "sync",
 	Usage:   "Sync AWS IAM users.",
 	Action:  syncMain,
 	Aliases: []string{"sync-users", "sync_users"},
 	Flags: []cli.Flag{
+		cli.StringSliceFlag{
+			Name:  "additional-groups",
+			Usage: "System user additional groups.",
+			Value: &defaultAdditionalGroups,
+		},
 		cli.BoolFlag{
 			Name:  "disable-sandbox",
 			Usage: "Disable users sandboxed sessions.",
@@ -73,6 +82,7 @@ func syncMain(ctx *cli.Context) error {
 
 // syncGroupsUsers synchronizes users from AWS IAM
 func syncGroupsUsers(ctx *cli.Context) error {
+	additionalGroups := ctx.StringSlice("additional-groups")
 	isSandboxed := ctx.Bool("disable-sandbox") == false
 	groupNames := ctx.StringSlice("groups")
 	groups := []*user.Group{}
@@ -105,7 +115,7 @@ func syncGroupsUsers(ctx *cli.Context) error {
 	// create AWS IAM users that do not exist in the system
 	for _, u := range iamUsers.Diff(sysUsers) {
 		log.Printf("Ensuring user %q", u.Username)
-		err = u.Ensure(isSandboxed)
+		err = u.Ensure(isSandboxed, additionalGroups)
 		if err != nil {
 			log.Printf("Failed to ensure user %q in the system: %s", u.Username, err)
 			continue
