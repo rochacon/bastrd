@@ -2,7 +2,7 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-
+    "${data.ignition_file.pam_sshd.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -111,4 +111,31 @@ ExecStart=/opt/bin/bastrd sync --interval=1m --groups=${var.ssh_group_name}
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+// bastrd integration with pam for on-demand user creation
+data "ignition_file" "pam_sshd" {
+  filesystem = "root"
+  path       = "/etc/pam.d/sshd"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+auth      requisite   pam_exec.so quiet stdout /opt/bin/bastrd mfa --role-arn "${aws_iam_role.bastrd.arn}"
+auth      sufficient  pam_unix.so nullok try_first_pass
+auth      sufficient  pam_sss.so  try_first_pass
+auth      required    pam_deny.so
+
+account   required    pam_unix.so
+account   required    pam_sss.so ignore_unknown_user ignore_authinfo_unavail
+account   optional    pam_permit.so
+
+session   required    pam_limits.so
+session   required    pam_env.so
+session   required    pam_unix.so
+session   optional    pam_permit.so
+session   optional    pam_sss.so
+-session  optional    pam_systemd.so
+EOF
+  }
 }
