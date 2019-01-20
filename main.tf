@@ -176,7 +176,6 @@ data "template_file" "bastrd_policy" {
         "iam:ListAccessKeys",
         "iam:ListGroupsForUser",
         "iam:ListSSHPublicKeys",
-        "sts:AssumeRole",
         "sts:GetCallerIdentity"
       ],
       "Resource": ["*"]

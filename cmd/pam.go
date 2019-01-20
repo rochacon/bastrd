@@ -9,11 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/rochacon/bastrd/pkg/auth"
 
 	"github.com/urfave/cli"
 )
@@ -47,7 +43,7 @@ func pamMain(ctx *cli.Context) error {
 	}
 	secretKey, mfaToken := secretKey[:lenSecretKey-6], secretKey[lenSecretKey-6:]
 	// validation session credentials last only 10s and are discarted
-	_, err := NewSessionCredentials(username, secretKey, mfaToken, 900*time.Second)
+	_, err := auth.NewSessionCredentials(username, secretKey, mfaToken, 900*time.Second)
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("Invalid credentials: %s", err), 1)
 	}
@@ -58,41 +54,4 @@ func pamMain(ctx *cli.Context) error {
 	// TODO setup user owned tmpfs for ~/.aws/credentials
 	log.Printf("Authenticated user %q", username)
 	return nil
-}
-
-// getUserSessionToken creates a temporary Access Key to validate an user's MFA and retrieve a session token
-func NewSessionCredentials(username, secretKey, mfaToken string, duration time.Duration) (*sts.Credentials, error) {
-	iamSvc := iam.New(session.New())
-	accessKeys, err := iamSvc.ListAccessKeys(&iam.ListAccessKeysInput{
-		UserName: aws.String(username),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(accessKeys.AccessKeyMetadata) == 0 {
-		return nil, fmt.Errorf("No matching access key found.")
-	}
-	accessKey := accessKeys.AccessKeyMetadata[0]
-	if *accessKey.Status != iam.StatusTypeActive {
-		return nil, fmt.Errorf("No active access key found.")
-	}
-	stsSvc := sts.New(session.New())
-	accountID, err := stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil, err
-	}
-	mfaArn := fmt.Sprintf("arn:aws:iam::%s:mfa/%s", *accountID.Account, username)
-	userSession, err := session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials(*accessKey.AccessKeyId, secretKey, ""),
-	})
-	stsSvc = sts.New(userSession)
-	creds, err := stsSvc.GetSessionToken(&sts.GetSessionTokenInput{
-		DurationSeconds: aws.Int64(int64(duration.Seconds())),
-		SerialNumber:    aws.String(mfaArn),
-		TokenCode:       aws.String(mfaToken),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error getting session token %q for %q: %s", mfaToken, username, err)
-	}
-	return creds.Credentials, nil
 }

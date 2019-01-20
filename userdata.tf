@@ -62,7 +62,7 @@ MaxAuthTries 3
 PermitEmptyPasswords no
 PermitRootLogin no
 PrintLastLog yes
-PrintMotd yes
+PrintMotd no
 UseDNS no
 UsePAM yes
 EOF
