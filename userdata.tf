@@ -2,7 +2,7 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-    "${data.ignition_file.pam_sshd.id}",
+    // "${data.ignition_file.pam_sshd.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -53,7 +53,7 @@ AllowAgentForwarding yes
 AllowGroups ${var.ssh_group_name}
 AllowStreamLocalForwarding no
 AllowTcpForwarding no
-AuthenticationMethods publickey,keyboard-interactive:pam
+AuthenticationMethods publickey
 AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes

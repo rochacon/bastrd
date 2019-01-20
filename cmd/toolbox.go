@@ -2,23 +2,16 @@ package cmd
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/rochacon/bastrd/pkg/user"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/google/shlex"
 	"github.com/urfave/cli"
@@ -65,27 +58,27 @@ var Toolbox = cli.Command{
 // 3. AWS session token setup on container tmpfs mount (re-written on session resume to refresh expiration)
 // 4. Attach to container
 func toolboxSessionMain(ctx *cli.Context) (err error) {
-	duration := ctx.Int64("duration")
+	// duration := ctx.Int64("duration")
 	image := ctx.String("image")
 	sshArgs := ctx.String("c")
 	username := ctx.String("username")
 	if username == "" {
 		return fmt.Errorf("username argument is required.")
 	}
-	mfaToken := ctx.String("token")
-	sessionToken, err := getUserSessionToken(username, mfaToken, duration)
-	if err != nil {
-		return fmt.Errorf("error creating user %q session access keys: %s", username, err)
-	}
+	// mfaToken := ctx.String("token")
+	// sessionToken, err := getUserSessionToken(username, mfaToken, duration)
+	// if err != nil {
+	// 	return fmt.Errorf("error creating user %q session access keys: %s", username, err)
+	// }
 	log.Println("Opening session")
 	err = ensureContainer(username, image, sshArgs)
 	if err != nil {
 		return fmt.Errorf("error opening session for user %q: %s", username, err)
 	}
-	err = copyCredentialsToContainer(username, sessionToken)
-	if err != nil {
-		return fmt.Errorf("failed to copy credentials into session container for user %q: %s", username, err)
-	}
+	// err = copyCredentialsToContainer(username, sessionToken)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to copy credentials into session container for user %q: %s", username, err)
+	// }
 	err = attachToContainer(username)
 	if err != nil {
 		return fmt.Errorf("failed to attach to session container for user %q: %s", username, err)
@@ -113,8 +106,6 @@ func ensureContainer(username, image, command string) error {
 	if strings.TrimSpace(string(containerID)) != "" {
 		return nil
 	}
-	// setup data directory for persistent storage
-	os.MkdirAll(filepath.Join(usr.HomeDir(), "data"), 0750)
 	// create container
 	createArgs := []string{
 		"container",
@@ -138,8 +129,7 @@ func ensureContainer(username, image, command string) error {
 		"--env=USER=" + usr.Username,
 		fmt.Sprintf("--mount=type=bind,source=/etc/group,destination=/etc/group,bind-propagation=rprivate,readonly"),
 		fmt.Sprintf("--mount=type=bind,source=/etc/passwd,destination=/etc/passwd,bind-propagation=rprivate,readonly"),
-		fmt.Sprintf("--mount=type=bind,source=%s/data,destination=%s/data,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
-		fmt.Sprintf("--mount=type=tmpfs,destination=%s,tmpfs-size=8192", filepath.Join(usr.HomeDir(), ".aws")),
+		fmt.Sprintf("--mount=type=bind,source=%s,destination=%s,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
 		"--user", fmt.Sprintf("%d:%d", usr.Uid(), usr.Uid()),
 		"--workdir", usr.HomeDir(),
 	}
@@ -206,70 +196,6 @@ func copyCredentialsToContainer(username string, token *sts.Credentials) error {
 		return fmt.Errorf("%s: %s", err, out)
 	}
 	return nil
-}
-
-// getUserSessionToken creates a temporary Access Key to validate an user's MFA and retrieve a session token
-func getUserSessionToken(username, mfaToken string, duration int64) (*sts.Credentials, error) {
-	if mfaToken == "" {
-		fmt.Printf("Enter MFA code: ")
-		reader := bufio.NewReader(os.Stdin)
-		mfaToken, _ = reader.ReadString('\n')
-		mfaToken = strings.TrimSpace(mfaToken)
-		// user entered empty string
-		if mfaToken == "" {
-			return nil, fmt.Errorf("MFA code required.")
-		}
-	}
-
-	iamSvc := iam.New(session.New())
-	accessKey, err := iamSvc.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: aws.String(username),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error creating user %q session validation access keys: %s", username, err)
-	}
-	log.Printf("Created access key %q for %q", *accessKey.AccessKey.AccessKeyId, username)
-	log.Printf("Scheduled user %q key %q deletion", username, *accessKey.AccessKey.AccessKeyId)
-	defer func() {
-		log.Printf("Deleting user %q key %q", username, *accessKey.AccessKey.AccessKeyId)
-		_, err := iamSvc.DeleteAccessKey(&iam.DeleteAccessKeyInput{
-			AccessKeyId: accessKey.AccessKey.AccessKeyId,
-			UserName:    accessKey.AccessKey.UserName,
-		})
-		if err != nil {
-			log.Printf("Error deleting user %q access key %q: %s", *accessKey.AccessKey.UserName, *accessKey.AccessKey.AccessKeyId, err)
-		}
-	}()
-
-	log.Printf("Gathering MFA device data")
-	accountID, err := sts.New(session.New()).GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil, err
-	}
-	mfaArn := fmt.Sprintf("arn:aws:iam::%s:mfa/%s", *accountID.Account, username)
-
-	log.Printf("Validating %q MFA...", username)
-	userSession, err := session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials(*accessKey.AccessKey.AccessKeyId, *accessKey.AccessKey.SecretAccessKey, ""),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error setting up user credentials session: %s", err)
-	}
-	stsSvc := sts.New(userSession)
-
-	// Wait a few seconds so AWS can propagate the new key
-	time.Sleep(8 * time.Second)
-
-	log.Printf("Requesting session credentials for %q", username)
-	sessionToken, err := stsSvc.GetSessionToken(&sts.GetSessionTokenInput{
-		DurationSeconds: aws.Int64(60 * 60 * duration),
-		SerialNumber:    aws.String(mfaArn),
-		TokenCode:       aws.String(mfaToken),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error getting session token %q for %q: %s", mfaToken, username, err)
-	}
-	return sessionToken.Credentials, nil
 }
 
 // awsCredentials is a template to render user's ~/.aws/credentials file
