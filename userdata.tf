@@ -49,16 +49,20 @@ data "ignition_file" "sshd_config" {
 
   content {
     content = <<EOF
-AuthenticationMethods publickey,keyboard-interactive
+AllowAgentForwarding yes
+AllowGroups ${var.ssh_group_name}
+AllowStreamLocalForwarding no
+AllowTcpForwarding no
+AuthenticationMethods publickey,keyboard-interactive:pam
 AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes
-ClientAliveInterval 180
+ClientAliveInterval 30
+MaxAuthTries 3
 PermitEmptyPasswords no
 PermitRootLogin no
-PrintLastLog no # handled by PAM
-PrintMotd no # handled by PAM
-Subsystem sftp internal-sftp
+PrintLastLog yes
+PrintMotd yes
 UseDNS no
 UsePAM yes
 EOF
@@ -121,7 +125,7 @@ data "ignition_file" "pam_sshd" {
 
   content {
     content = <<EOF
-auth  sufficient                  pam_exec.so debug log=/tmp/bastrd_mfa.log expose_authtok quiet stdout /opt/bin/bastrd pam --role-arn ${aws_iam_role.operator.arn}
+auth  sufficient                  pam_exec.so expose_authtok quiet stdout /opt/bin/bastrd pam
 auth  [success=1 default=ignore]  pam_unix.so nullok_secure
 auth  requisite                   pam_deny.so
 auth  required                    pam_permit.so

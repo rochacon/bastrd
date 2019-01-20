@@ -24,10 +24,6 @@ var PAM = cli.Command{
 	Action: pamMain,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "role-arn",
-			Usage: "Role ARN for normal user.",
-		},
-		cli.StringFlag{
 			Name:   "username",
 			Usage:  "AWS IAM username.",
 			EnvVar: "PAM_USER",
@@ -41,10 +37,6 @@ func pamMain(ctx *cli.Context) error {
 	if username == "" {
 		return fmt.Errorf("Username argument (PAM_USER environment variable) is required.")
 	}
-	roleArn := ctx.String("role-arn")
-	if roleArn == "" {
-		return cli.NewExitError(fmt.Errorf("Role Arn must be configured."), 1)
-	}
 	reader := bufio.NewReader(os.Stdin)
 	secretKey, _ := reader.ReadString('\n')
 	secretKey = strings.TrimSpace(secretKey)
@@ -55,7 +47,7 @@ func pamMain(ctx *cli.Context) error {
 	}
 	secretKey, mfaToken := secretKey[:lenSecretKey-6], secretKey[lenSecretKey-6:]
 	// validation session credentials last only 10s and are discarted
-	_, err := NewSessionCredentials(roleArn, username, secretKey, mfaToken, 900*time.Second)
+	_, err := NewSessionCredentials(username, secretKey, mfaToken, 900*time.Second)
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("Invalid credentials: %s", err), 1)
 	}
@@ -64,12 +56,12 @@ func pamMain(ctx *cli.Context) error {
 		return cli.NewExitError(fmt.Errorf("User unavailable: %s", err), 1)
 	}
 	// TODO setup user owned tmpfs for ~/.aws/credentials
-	log.Printf("Authenticated user %q for AWS IAM role %q", username, roleArn)
+	log.Printf("Authenticated user %q", username)
 	return nil
 }
 
 // getUserSessionToken creates a temporary Access Key to validate an user's MFA and retrieve a session token
-func NewSessionCredentials(roleArn, username, secretKey, mfaToken string, duration time.Duration) (*sts.Credentials, error) {
+func NewSessionCredentials(username, secretKey, mfaToken string, duration time.Duration) (*sts.Credentials, error) {
 	iamSvc := iam.New(session.New())
 	accessKeys, err := iamSvc.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(username),
@@ -89,21 +81,13 @@ func NewSessionCredentials(roleArn, username, secretKey, mfaToken string, durati
 	if err != nil {
 		return nil, err
 	}
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-	}
-	timestamp := time.Now().Unix()
-	sessionName := fmt.Sprintf("%s-%d-%s", username, timestamp, hostname)
 	mfaArn := fmt.Sprintf("arn:aws:iam::%s:mfa/%s", *accountID.Account, username)
 	userSession, err := session.NewSession(&aws.Config{
 		Credentials: credentials.NewStaticCredentials(*accessKey.AccessKeyId, secretKey, ""),
 	})
 	stsSvc = sts.New(userSession)
-	creds, err := stsSvc.AssumeRole(&sts.AssumeRoleInput{
+	creds, err := stsSvc.GetSessionToken(&sts.GetSessionTokenInput{
 		DurationSeconds: aws.Int64(int64(duration.Seconds())),
-		RoleArn:         aws.String(roleArn),
-		RoleSessionName: aws.String(sessionName),
 		SerialNumber:    aws.String(mfaArn),
 		TokenCode:       aws.String(mfaToken),
 	})
