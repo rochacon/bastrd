@@ -2,7 +2,8 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-    "${data.ignition_file.pam_sshd.id}",
+
+    // "${data.ignition_file.pam_sshd.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -106,7 +107,7 @@ After=syslog.target network.target auditd.service
 Restart=always
 RestartSec=10
 Environment=AWS_DEFAULT_REGION=${var.region}
-ExecStart=/opt/bin/bastrd sync --interval=1m --groups=${var.ssh_group_name}
+ExecStart=/opt/bin/bastrd sync --disable-sandbox --interval=1m --groups=${var.ssh_group_name}
 
 [Install]
 WantedBy=multi-user.target
@@ -121,7 +122,7 @@ data "ignition_file" "pam_sshd" {
 
   content {
     content = <<EOF
-auth      requisite   pam_exec.so quiet stdout /opt/bin/bastrd mfa --role-arn "${aws_iam_role.bastrd.arn}"
+auth      requisite   pam_exec.so quiet stdout /opt/bin/bastrd mfa --role-arn "${aws_iam_role.users.arn}"
 auth      sufficient  pam_unix.so nullok try_first_pass
 auth      sufficient  pam_sss.so  try_first_pass
 auth      required    pam_deny.so
