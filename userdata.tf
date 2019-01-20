@@ -2,8 +2,7 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-
-    // "${data.ignition_file.pam_sshd.id}",
+    "${data.ignition_file.pam_sshd.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -50,7 +49,7 @@ data "ignition_file" "sshd_config" {
 
   content {
     content = <<EOF
-AuthenticationMethods publickey
+AuthenticationMethods publickey,keyboard-interactive
 AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes
@@ -122,20 +121,18 @@ data "ignition_file" "pam_sshd" {
 
   content {
     content = <<EOF
-auth      requisite   pam_exec.so quiet stdout /opt/bin/bastrd mfa --role-arn "${aws_iam_role.users.arn}"
-auth      sufficient  pam_unix.so nullok try_first_pass
-auth      sufficient  pam_sss.so  try_first_pass
-auth      required    pam_deny.so
+auth  sufficient                  pam_exec.so debug log=/tmp/bastrd_mfa.log expose_authtok quiet stdout /opt/bin/bastrd pam --role-arn ${aws_iam_role.operator.arn}
+auth  [success=1 default=ignore]  pam_unix.so nullok_secure
+auth  requisite                   pam_deny.so
+auth  required                    pam_permit.so
 
 account   required    pam_unix.so
-account   required    pam_sss.so ignore_unknown_user ignore_authinfo_unavail
 account   optional    pam_permit.so
 
 session   required    pam_limits.so
 session   required    pam_env.so
 session   required    pam_unix.so
 session   optional    pam_permit.so
-session   optional    pam_sss.so
 -session  optional    pam_systemd.so
 EOF
   }

@@ -15,7 +15,7 @@ image:
 publish: publish_binary publish_image publish_image_toolbox
 
 publish_binary:
-	gzip -f bastrd
+	gzip -k -f bastrd
 	aws s3 cp ./bastrd.gz s3://bastrd-dev/bastrd.gz --acl public-read
 
 publish_image:

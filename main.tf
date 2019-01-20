@@ -168,11 +168,12 @@ data "template_file" "bastrd_policy" {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "iamRO",
+      "Sid": "iam",
       "Effect": "Allow",
       "Action": [
         "iam:GetGroup",
         "iam:GetSSHPublicKey",
+        "iam:ListAccessKeys",
         "iam:ListGroupsForUser",
         "iam:ListSSHPublicKeys",
         "sts:AssumeRole",
@@ -183,10 +184,6 @@ data "template_file" "bastrd_policy" {
   ]
 }
 EOF
-
-  vars {
-    users_arns = "${jsonencode(data.aws_iam_user.users.*.arn)}"
-  }
 }
 
 resource "aws_iam_instance_profile" "bastrd" {
