@@ -2,7 +2,8 @@ data "ignition_config" "userdata" {
   files = [
     "${data.ignition_file.bastrd.id}",
     "${data.ignition_file.bastrd_toolbox.id}",
-    // "${data.ignition_file.pam_sshd.id}",
+    "${data.ignition_file.pam_sshd.id}",
+    "${data.ignition_file.pam_sudo.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -117,7 +118,7 @@ WantedBy=multi-user.target
 EOF
 }
 
-// bastrd integration with pam for on-demand user creation
+// bastrd integration with pam for password check against AWS IAM
 data "ignition_file" "pam_sshd" {
   filesystem = "root"
   path       = "/etc/pam.d/sshd"
@@ -126,6 +127,30 @@ data "ignition_file" "pam_sshd" {
   content {
     content = <<EOF
 auth  sufficient                  pam_exec.so expose_authtok quiet stdout /opt/bin/bastrd pam
+auth  [success=1 default=ignore]  pam_unix.so nullok_secure
+auth  requisite                   pam_deny.so
+auth  required                    pam_permit.so
+
+account   required    pam_unix.so
+account   optional    pam_permit.so
+
+session   required    pam_limits.so
+session   required    pam_env.so
+session   required    pam_unix.so
+session   optional    pam_permit.so
+-session  optional    pam_systemd.so
+EOF
+  }
+}
+
+data "ignition_file" "pam_sudo" {
+  filesystem = "root"
+  path       = "/etc/pam.d/sudo"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+auth  sufficient                  pam_exec.so expose_authtok quiet stdout /opt/bin/bastrd pam --skip-credential-update
 auth  [success=1 default=ignore]  pam_unix.so nullok_secure
 auth  requisite                   pam_deny.so
 auth  required                    pam_permit.so

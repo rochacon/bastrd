@@ -1,18 +1,14 @@
 package cmd
 
 import (
-	"archive/tar"
-	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
-	"text/template"
 
 	"github.com/rochacon/bastrd/pkg/user"
 
-	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/google/shlex"
 	"github.com/urfave/cli"
 )
@@ -156,53 +152,3 @@ func ensureContainer(username, image, command string) error {
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
 }
-
-// copyCredentialsToContainer renders the awsCredentials template as
-// /home/username/.aws/credentials file inside the toolbox
-func copyCredentialsToContainer(username string, token *sts.Credentials) error {
-	content := &bytes.Buffer{}
-	err := awsCredentials.Execute(content, struct {
-		AccessKeyId, Region, SecretAccessKey, SessionToken string
-	}{
-		AccessKeyId:     *token.AccessKeyId,
-		SecretAccessKey: *token.SecretAccessKey,
-		SessionToken:    *token.SessionToken,
-		Region:          os.Getenv("AWS_DEFAULT_REGION"),
-	})
-	tarBuf := &bytes.Buffer{}
-	w := tar.NewWriter(tarBuf)
-	hdr := &tar.Header{
-		Name: "credentials",
-		Mode: 0600,
-		Size: int64(content.Len()),
-	}
-	err = w.WriteHeader(hdr)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(content.Bytes())
-	if err != nil {
-		return err
-	}
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	// XXX(rochacon) can't copy as normal file since the target is the tmpfs mount
-	cmd := exec.Command(DOCKER, "container", "exec", "-i", username, "tar", "vxC", "/home/"+username+"/.aws/")
-	cmd.Stdin = tarBuf
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %s", err, out)
-	}
-	return nil
-}
-
-// awsCredentials is a template to render user's ~/.aws/credentials file
-var awsCredentials = template.Must(template.New("~/.aws/credentials").Parse(`
-[default]
-aws_access_key_id = {{ .AccessKeyId }}
-aws_secret_access_key = {{ .SecretAccessKey }}
-aws_session_token = {{ .SessionToken }}
-{{ if .Region }}region = {{ .Region }}{{ end }}
-`))
