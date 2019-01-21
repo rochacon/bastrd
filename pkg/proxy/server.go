@@ -107,13 +107,14 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	secretKey, mfaToken := password[:lenPassword-6], password[lenPassword-6:]
 	_, err := auth.NewSessionCredentials(username, secretKey, mfaToken, expiration)
 	if err != nil {
-		log.Printf("Failed authentication for %q", username)
+		log.Printf("Failed authentication for %q: %s", username, err)
 		w.Header().Set("WWW-Authenticate", "Basic realm=\"Invalid credentials\"")
 		http.Error(w, "Unauthorized", 401)
 		return
 	}
 	jwtToken, err := s.jwtNew(username, expiration)
 	if err != nil {
+		log.Printf("Unexpected error while authenticating %q: %s", username, err)
 		http.Error(w, fmt.Sprintf("Unexpected error: %s", err), 500)
 		return
 	}
