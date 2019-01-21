@@ -11,4 +11,5 @@ RUN go install -v -ldflags "-X main.VERSION=$(git describe --abbrev=10 --always 
 FROM alpine
 COPY --from=build /etc/ssl/certs /etc/ssl/certs
 COPY --from=build /go/bin/bastrd /bastrd
+USER nobody
 ENTRYPOINT ["/bastrd"]

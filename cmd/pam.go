@@ -30,7 +30,6 @@ var PAM = cli.Command{
 		cli.BoolFlag{
 			Name:  "skip-credential-update",
 			Usage: "Skip session credential update.",
-			Value: false,
 		},
 	},
 }

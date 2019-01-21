@@ -4,6 +4,7 @@ data "ignition_config" "userdata" {
     "${data.ignition_file.bastrd_toolbox.id}",
     "${data.ignition_file.pam_sshd.id}",
     "${data.ignition_file.pam_sudo.id}",
+    "${data.ignition_file.sudoers.id}",
     "${data.ignition_file.sshd_config.id}",
   ]
 
@@ -54,7 +55,7 @@ AllowAgentForwarding yes
 AllowGroups ${var.ssh_group_name}
 AllowStreamLocalForwarding no
 AllowTcpForwarding no
-AuthenticationMethods publickey
+AuthenticationMethods publickey,keyboard-interactive:pam
 AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes
@@ -111,7 +112,7 @@ After=syslog.target network.target auditd.service
 Restart=always
 RestartSec=10
 Environment=AWS_DEFAULT_REGION=${var.region}
-ExecStart=/opt/bin/bastrd sync --disable-sandbox --interval=1m --groups=${var.ssh_group_name}
+ExecStart=/opt/bin/bastrd sync --additional-groups docker,wheel --disable-sandbox --interval=1m --groups=${var.ssh_group_name}
 
 [Install]
 WantedBy=multi-user.target
@@ -163,6 +164,25 @@ session   required    pam_env.so
 session   required    pam_unix.so
 session   optional    pam_permit.so
 -session  optional    pam_systemd.so
+EOF
+  }
+}
+
+data "ignition_file" "sudoers" {
+  filesystem = "root"
+  path       = "/etc/sudoers.d/default"
+  mode       = 0600
+
+  content {
+    content = <<EOF
+## Based on https://github.com/coreos/baselayout/blob/master/baselayout/sudoers
+## Pass LESSCHARSET through for systemd commands run through sudo that call less.
+## See https://github.com/coreos/bugs/issues/365.
+Defaults env_keep += "LESSCHARSET"
+
+## enable root and wheel
+root ALL=(ALL) ALL
+%wheel ALL=(ALL) ALL
 EOF
   }
 }

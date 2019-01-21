@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	osuser "os/user"
 	"path/filepath"
+	"strings"
 )
 
 // User represents a mirrored user between AWS IAM and the local system
@@ -17,8 +18,8 @@ type User struct {
 }
 
 // Ensure ensure a user is correctly configured on the system
-func (u *User) Ensure(sandboxed bool) error {
-	return ensureUser(u.Username, sandboxed)
+func (u *User) Ensure(sandboxed bool, additionalGroups []string) error {
+	return ensureUser(u.Username, sandboxed, additionalGroups)
 }
 
 // HomeDir returns the user's home directory
@@ -37,11 +38,11 @@ func (u User) Uid() uint16 {
 }
 
 // ensureUser add an user in the system idempotently
-func ensureUser(username string, sandboxed bool) error {
+func ensureUser(username string, sandboxed bool, additionalGroups []string) error {
 	if userExists(username) {
 		return nil
 	}
-	if err := userAdd(username, sandboxed); err != nil {
+	if err := userAdd(username, sandboxed, additionalGroups); err != nil {
 		return fmt.Errorf("failed to create user: %q", err)
 	}
 	log.Printf("Created user %q", username)
@@ -49,7 +50,7 @@ func ensureUser(username string, sandboxed bool) error {
 }
 
 // userAdd adds a user to the system with toolbox as the default shell
-func userAdd(username string, sandboxed bool) error {
+func userAdd(username string, sandboxed bool, additionalGroups []string) error {
 	shell := "/opt/bin/bastrd-toolbox"
 	if !sandboxed {
 		shell = "/bin/bash"
@@ -60,7 +61,7 @@ func userAdd(username string, sandboxed bool) error {
 		"-m",
 		"-u", uid,
 		"-U",
-		"-G", "docker",
+		"-G", strings.Join(additionalGroups, ","),
 		"-s", shell,
 		"-c", "bastrd managed user",
 		username,
