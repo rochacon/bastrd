@@ -77,11 +77,16 @@ func pamMain(ctx *cli.Context) error {
 // renderUserSessionCredentials renders the awsCredentials template as
 // /home/username/.aws/credentials file inside the toolbox
 func renderUserSessionCredentials(usr *user.User, token *sts.Credentials) error {
-	err := os.MkdirAll(filepath.Join(usr.HomeDir(), ".aws"), 0700)
+	homeAWS := filepath.Join(usr.HomeDir(), ".aws")
+	err := os.MkdirAll(homeAWS, 0700)
 	if err != nil {
 		return err
 	}
-	filename := filepath.Join(usr.HomeDir(), ".aws", "credentials")
+	err = os.Chown(homeAWS, int(usr.Uid()), int(usr.Uid()))
+	if err != nil {
+		return err
+	}
+	filename := filepath.Join(homeAWS, "credentials")
 	fp, err := os.Create(filename)
 	if err != nil {
 		return err

@@ -62,6 +62,7 @@ func userAdd(username string, sandboxed bool, additionalGroups []string) error {
 		"-u", uid,
 		"-U",
 		"-G", strings.Join(additionalGroups, ","),
+		"-p", "*", // disable password
 		"-s", shell,
 		"-c", "bastrd managed user",
 		username,
