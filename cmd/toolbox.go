@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/rochacon/bastrd/pkg/user"
@@ -91,6 +92,8 @@ func ensureContainer(username, image, command string) error {
 	if strings.TrimSpace(string(containerID)) != "" {
 		return nil
 	}
+	// setup data directory for persistent storage
+	os.MkdirAll(filepath.Join(usr.HomeDir(), "data"), 0750)
 	// create container
 	createArgs := []string{
 		"container",

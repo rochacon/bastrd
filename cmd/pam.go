@@ -98,7 +98,7 @@ func renderUserSessionCredentials(usr *user.User, token *sts.Credentials) error 
 		return err
 	}
 	defer fp.Close()
-	err = os.Chown(fp.Name(), int(usr.Uid()), int(usr.Uid()))
+	err = os.Chown(filename, int(usr.Uid()), int(usr.Uid()))
 	if err != nil {
 		return err
 	}
