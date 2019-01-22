@@ -86,7 +86,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Proxy(w http.ResponseWriter, r *http.Request) {
 	p := httputil.NewSingleHostReverseProxy(s.Upstream)
 	r.Header.Del("Authorization")
-	r.URL = s.Upstream
+	r.URL.Host = s.Upstream.Host
 	p.ServeHTTP(w, r)
 }
 
