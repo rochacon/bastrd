@@ -117,6 +117,7 @@ func ensureContainer(username, image, command string) error {
 		"--env=USER=" + usr.Username,
 		fmt.Sprintf("--mount=type=bind,source=/etc/group,destination=/etc/group,bind-propagation=rprivate,readonly"),
 		fmt.Sprintf("--mount=type=bind,source=/etc/passwd,destination=/etc/passwd,bind-propagation=rprivate,readonly"),
+		fmt.Sprintf("--mount=type=bind,source=%s/.aws,destination=%s/.aws,bind-propagation=rprivate,readonly", usr.HomeDir(), usr.HomeDir()),
 		fmt.Sprintf("--mount=type=bind,source=%s/data,destination=%s/data,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
 		"--user", fmt.Sprintf("%d:%d", usr.Uid(), usr.Uid()),
 		fmt.Sprintf("--workdir=%s/data", usr.HomeDir()),
