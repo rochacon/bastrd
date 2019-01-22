@@ -56,14 +56,14 @@ func pamMain(ctx *cli.Context) error {
 		return cli.NewExitError(fmt.Errorf("Invalid credentials: %s", err), 1)
 	}
 	// check that user also exists on host
-	usr, err := osuser.Lookup(username)
+	_, err = osuser.Lookup(username)
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("User unavailable: %s", err), 1)
 	}
+	usr := &user.User{Username: username}
 	// setup user session credentials
 	// FIXME setup user owned tmpfs for ~/.aws/credentials
 	if ctx.Bool("skip-credential-update") == false {
-		usr := &user.User{Username: username}
 		err = renderUserSessionCredentials(usr, creds)
 		if err != nil {
 			log.Printf("Failed to set session credentials: %s", err)
