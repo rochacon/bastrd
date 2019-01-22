@@ -21,6 +21,7 @@ func main() {
 	app.Commands = []cli.Command{
 		cmd.AuthorizedKeys,
 		cmd.PAM,
+		cmd.Proxy,
 		cmd.Sync,
 		cmd.Toolbox,
 	}
