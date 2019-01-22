@@ -23,6 +23,11 @@ var PAM = cli.Command{
 	Usage:  "Authenticate an user against an IAM role. This command is designed to be called by PAM pam_exec module.",
 	Action: pamMain,
 	Flags: []cli.Flag{
+		cli.DurationFlag{
+			Name:  "duration",
+			Usage: "Session duration.",
+			Value: 3 * time.Hour,
+		},
 		cli.StringFlag{
 			Name:   "username",
 			Usage:  "AWS IAM username.",
@@ -51,7 +56,7 @@ func pamMain(ctx *cli.Context) error {
 	}
 	secretKey, mfaToken := secretKey[:lenSecretKey-6], secretKey[lenSecretKey-6:]
 	// validation session credentials last only 10s and are discarted
-	creds, err := auth.NewSessionCredentials(username, secretKey, mfaToken, 900*time.Second)
+	creds, err := auth.NewSessionCredentials(username, secretKey, mfaToken, ctx.Duration("duration"))
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("Invalid credentials: %s", err), 1)
 	}
