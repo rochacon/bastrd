@@ -47,12 +47,10 @@ var Toolbox = cli.Command{
 	},
 }
 
-// toolboxSessionMain handles the user's MFA validation and toolbox initialization
+// toolboxSessionMain handles the user's toolbox initialization
 // Overall steps:
-// 1. AWS MFA validation and session token creation
-// 2. Container setup (this is skipped on session resume)
-// 3. AWS session token setup on container tmpfs mount (re-written on session resume to refresh expiration)
-// 4. Attach to container
+// 1. Container setup (this is skipped on session resume)
+// 2. Attach to container
 func toolboxSessionMain(ctx *cli.Context) (err error) {
 	// duration := ctx.Int64("duration")
 	image := ctx.String("image")
@@ -61,20 +59,11 @@ func toolboxSessionMain(ctx *cli.Context) (err error) {
 	if username == "" {
 		return fmt.Errorf("username argument is required.")
 	}
-	// mfaToken := ctx.String("token")
-	// sessionToken, err := getUserSessionToken(username, mfaToken, duration)
-	// if err != nil {
-	// 	return fmt.Errorf("error creating user %q session access keys: %s", username, err)
-	// }
 	log.Println("Opening session")
 	err = ensureContainer(username, image, sshArgs)
 	if err != nil {
 		return fmt.Errorf("error opening session for user %q: %s", username, err)
 	}
-	// err = copyCredentialsToContainer(username, sessionToken)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to copy credentials into session container for user %q: %s", username, err)
-	// }
 	err = attachToContainer(username)
 	if err != nil {
 		return fmt.Errorf("failed to attach to session container for user %q: %s", username, err)
@@ -125,9 +114,9 @@ func ensureContainer(username, image, command string) error {
 		"--env=USER=" + usr.Username,
 		fmt.Sprintf("--mount=type=bind,source=/etc/group,destination=/etc/group,bind-propagation=rprivate,readonly"),
 		fmt.Sprintf("--mount=type=bind,source=/etc/passwd,destination=/etc/passwd,bind-propagation=rprivate,readonly"),
-		fmt.Sprintf("--mount=type=bind,source=%s,destination=%s,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
+		fmt.Sprintf("--mount=type=bind,source=%s/data,destination=%s/data,bind-propagation=rprivate", usr.HomeDir(), usr.HomeDir()),
 		"--user", fmt.Sprintf("%d:%d", usr.Uid(), usr.Uid()),
-		"--workdir", usr.HomeDir(),
+		fmt.Sprintf("--workdir=%s/data", usr.HomeDir()),
 	}
 	sshAuthSock := os.Getenv("SSH_AUTH_SOCK")
 	if sshAuthSock != "" {

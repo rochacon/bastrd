@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rochacon/bastrd/pkg/auth"
+	"github.com/rochacon/bastrd/pkg/user"
 
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/urfave/cli"
@@ -62,10 +63,11 @@ func pamMain(ctx *cli.Context) error {
 	// setup user session credentials
 	// FIXME setup user owned tmpfs for ~/.aws/credentials
 	if ctx.Bool("skip-credential-update") == false {
-		os.MkdirAll(filepath.Join(usr.HomeDir, ".aws"), 0700)
-		err = renderUserSessionCredentials(filepath.Join(usr.HomeDir, ".aws", "credentials"), creds)
+		usr := &user.User{Username: username}
+		err = renderUserSessionCredentials(usr, creds)
 		if err != nil {
 			log.Printf("Failed to set session credentials: %s", err)
+			return err
 		}
 	}
 	log.Printf("Authenticated user %q", username)
@@ -74,7 +76,9 @@ func pamMain(ctx *cli.Context) error {
 
 // renderUserSessionCredentials renders the awsCredentials template as
 // /home/username/.aws/credentials file inside the toolbox
-func renderUserSessionCredentials(filename string, token *sts.Credentials) error {
+func renderUserSessionCredentials(usr *user.User, token *sts.Credentials) error {
+	os.MkdirAll(filepath.Join(usr.HomeDir(), ".aws"), 0700)
+	filename := filepath.Join(usr.HomeDir(), ".aws", "credentials")
 	fp, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -91,6 +95,10 @@ func renderUserSessionCredentials(filename string, token *sts.Credentials) error
 		return err
 	}
 	defer fp.Close()
+	err = os.Chown(fp.Name(), int(usr.Uid()), int(usr.Uid()))
+	if err != nil {
+		return err
+	}
 	return fp.Chmod(0600)
 }
 
