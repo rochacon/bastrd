@@ -112,7 +112,7 @@ After=syslog.target network.target auditd.service
 Restart=always
 RestartSec=10
 Environment=AWS_DEFAULT_REGION=${var.region}
-ExecStart=/opt/bin/bastrd sync --additional-groups docker,wheel --disable-sandbox --interval=1m --groups=${var.ssh_group_name}
+ExecStart=/opt/bin/bastrd sync --interval=1m --groups=${var.ssh_group_name}
 
 [Install]
 WantedBy=multi-user.target
@@ -180,9 +180,9 @@ data "ignition_file" "sudoers" {
 ## See https://github.com/coreos/bugs/issues/365.
 Defaults env_keep += "LESSCHARSET"
 
-## enable root and wheel
+## enable root and ${var.ssh_group_name} group
 root ALL=(ALL) ALL
-%wheel ALL=(ALL) ALL
+%${var.ssh_group_name} ALL=(ALL) ALL
 EOF
   }
 }
