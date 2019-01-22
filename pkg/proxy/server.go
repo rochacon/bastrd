@@ -85,9 +85,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // proxy request to upstream with net/http/httputil.SingleHostReverseProxy
 func (s *Server) Proxy(w http.ResponseWriter, r *http.Request) {
 	p := httputil.NewSingleHostReverseProxy(s.Upstream)
-	r.Header.Del("Authorization")
-	r.URL.Host = s.Upstream.Host
-	p.ServeHTTP(w, r)
+	url := r.URL
+	url.Host = s.Upstream.Host
+	defer r.Body.Close()
+	req, _ := http.NewRequest(r.Method, url.String(), r.Body)
+	p.ServeHTTP(w, req)
 }
 
 // login validates basic auth of username and secret+mfa on AWS IAM and sets cookie with session jwt
