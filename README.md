@@ -18,7 +18,7 @@ The toolbox container has the following features:
 
 * Validates MFA against user's AWS IAM MFA device
 * Create temporary user session AWS credentials
-* Mount temporary credentials  as `/home/<username>/.aws/` using a tmpfs mount
+* Write temporary credentials  as `/home/<username>/.aws/` for easy of use
 * Customizable session container image for advanced tools, check `Dockerfile.toolbox` for the default settings
 * Session resuming, for easier recovery of connections issues
 * SSH-agent forwarding (note: doesn't work on session resuming)

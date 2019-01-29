@@ -67,7 +67,6 @@ func pamMain(ctx *cli.Context) error {
 	}
 	usr := &user.User{Username: username}
 	// setup user session credentials
-	// FIXME setup user owned tmpfs for ~/.aws/credentials
 	if ctx.Bool("skip-credential-update") == false {
 		err = renderUserSessionCredentials(usr, creds)
 		if err != nil {
