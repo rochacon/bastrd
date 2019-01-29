@@ -19,19 +19,19 @@ var AuthorizedKeys = cli.Command{
 	Aliases:   []string{"authorized_keys"},
 	Flags: []cli.Flag{
 		cli.StringSliceFlag{
-			Name:  "allowed-groups",
-			Usage: "Comma separated list of AWS IAM Groups allowed to SSH. (defaults to bastrd)",
+			Name:  "allowed-group",
+			Usage: "AWS IAM group allowed to SSH. Can be provided multiple times. (defaults to bastrd)",
 		},
 	},
 }
 
-// getAuthorizedKeysForUser retrieves
+// getAuthorizedKeysForUser validates user belongs to allowed groups and retrieves its SSH public keys from AWS IAM
 func getAuthorizedKeysForUser(ctx *cli.Context) error {
 	username := ctx.Args().Get(0)
 	if username == "" {
 		return fmt.Errorf("Username argument is required.")
 	}
-	allowedGroups := ctx.StringSlice("allowed-groups")
+	allowedGroups := ctx.StringSlice("allowed-group")
 	if len(allowedGroups) == 0 {
 		allowedGroups = append(allowedGroups, "bastrd")
 	}

@@ -27,8 +27,8 @@ var Sync = cli.Command{
 	Aliases: []string{"sync-users", "sync_users"},
 	Flags: []cli.Flag{
 		cli.StringSliceFlag{
-			Name:  "additional-groups",
-			Usage: "System user additional groups.",
+			Name:  "additional-group",
+			Usage: "System user additional group. Can be specified multiple times. (Defaults to docker)",
 			Value: &defaultAdditionalGroups,
 		},
 		cli.BoolFlag{
@@ -36,8 +36,8 @@ var Sync = cli.Command{
 			Usage: "Disable users sandboxed sessions.",
 		},
 		cli.StringSliceFlag{
-			Name:  "groups",
-			Usage: "AWS IAM group names to be synced. ATTENTION: Make sure these groups names don't conflict with existent system groups.",
+			Name:  "group",
+			Usage: "AWS IAM group name to be synced. Can be specified multiple times. ATTENTION: Make sure these groups names don't conflict with existent system groups.",
 		},
 		cli.DurationFlag{
 			Name:  "interval",
@@ -47,7 +47,7 @@ var Sync = cli.Command{
 }
 
 func syncMain(ctx *cli.Context) error {
-	groups := ctx.StringSlice("groups")
+	groups := ctx.StringSlice("group")
 	if len(groups) == 0 {
 		return fmt.Errorf("You must provide at least 1 AWS IAM group name.")
 	}
@@ -82,9 +82,9 @@ func syncMain(ctx *cli.Context) error {
 
 // syncGroupsUsers synchronizes users from AWS IAM
 func syncGroupsUsers(ctx *cli.Context) error {
-	additionalGroups := ctx.StringSlice("additional-groups")
+	additionalGroups := ctx.StringSlice("additional-group")
 	isSandboxed := ctx.Bool("disable-sandbox") == false
-	groupNames := ctx.StringSlice("groups")
+	groupNames := ctx.StringSlice("group")
 	groups := []*user.Group{}
 	for _, name := range groupNames {
 		groups = append(groups, &user.Group{Name: name})

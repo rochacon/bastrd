@@ -19,8 +19,8 @@ var Proxy = cli.Command{
 	Action: proxyMain,
 	Flags: []cli.Flag{
 		cli.StringSliceFlag{
-			Name:  "allowed-groups",
-			Usage: "Comma separated list of AWS IAM Groups allowed to authenticate. (defaults to empty, which allows all)",
+			Name:  "allowed-group",
+			Usage: "AWS IAM group allowed to access upstream. Can be provided multiple times. (defaults to empty, which allows all)",
 		},
 		cli.DurationFlag{
 			Name:  "group-cache-period",
@@ -69,9 +69,11 @@ func proxyMain(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("Could not parse upstream: %s", err)
 	}
+	allowedGroups := ctx.StringSlice("allowed-group")
+	log.Printf("Allowed groups: %+v", allowedGroups)
 	log.Printf("Forwarding requests to: %s", upstream)
 	srv := proxy.New(ctx.String("bind"), []byte(secretKey), upstream)
-	srv.AllowedGroups = ctx.StringSlice("allowed-groups")
+	srv.AllowedGroups = allowedGroups
 	srv.GroupCachePeriod = ctx.Duration("group-cache-period")
 	srv.IAM = iam.New(session.New())
 	srv.SessionCookieName = sessionCookieName
