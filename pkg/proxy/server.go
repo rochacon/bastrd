@@ -199,7 +199,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	jwtToken, err := s.jwtNew(username, expiration)
 	if err != nil {
 		log.Printf("Unexpected error while authenticating %q: %s", username, err)
-		http.Error(w, fmt.Sprintf("Unexpected error: %s", err), 500)
+		http.Error(w, fmt.Sprintf("Unexpected error: %s", err), http.StatusInternalServerError)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -210,7 +210,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 	})
-	http.Redirect(w, r, "/", 302)
+	http.Redirect(w, r, s.Upstream.Path, http.StatusFound)
 }
 
 // logout kills cookie and redirect to /
