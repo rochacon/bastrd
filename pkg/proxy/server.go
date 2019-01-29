@@ -72,12 +72,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check jwt in cookie, if good call proxy
 	sessionCookie, err := r.Cookie(s.SessionCookieName)
 	if err != nil {
-		http.Redirect(w, r, "/login?error=invalid_cookie", 302)
+		http.Redirect(w, r, "/login?error=invalid_cookie", http.StatusFound)
 		return
 	}
 	tkn, err := s.jwtParse(sessionCookie.Value)
 	if err != nil {
-		http.Redirect(w, r, "/login?error=invalid_token", 302)
+		http.Redirect(w, r, "/login?error=invalid_token", http.StatusFound)
 		return
 	}
 	log.Printf("Proxying user %q %q %q", tkn["username"], r.Method, r.URL)
@@ -123,13 +123,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	username, password, ok := r.BasicAuth()
 	if !ok {
 		w.Header().Set("WWW-Authenticate", "Basic realm=\"Provide your credentials\"")
-		http.Error(w, "Unauthorized", 401)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	lenPassword := len(password)
 	if lenPassword < 7 {
 		w.Header().Set("WWW-Authenticate", "Basic realm=\"Invalid credentials\"")
-		http.Error(w, "Unauthorized", 401)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	expiration := time.Duration(time.Hour * 2)
@@ -138,7 +138,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Failed authentication for %q: %s", username, err)
 		w.Header().Set("WWW-Authenticate", "Basic realm=\"Invalid credentials\"")
-		http.Error(w, "Unauthorized", 401)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	jwtToken, err := s.jwtNew(username, expiration)
