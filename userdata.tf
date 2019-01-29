@@ -112,7 +112,7 @@ After=syslog.target network.target auditd.service
 Restart=always
 RestartSec=10
 Environment=AWS_DEFAULT_REGION=${var.region}
-ExecStart=/opt/bin/bastrd sync --interval=1m --groups=${var.ssh_group_name}
+ExecStart=/opt/bin/bastrd sync --interval=1m --group=${var.ssh_group_name}
 
 [Install]
 WantedBy=multi-user.target
