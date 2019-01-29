@@ -56,7 +56,7 @@ AllowGroups ${var.ssh_group_name}
 AllowStreamLocalForwarding no
 AllowTcpForwarding no
 AuthenticationMethods publickey,keyboard-interactive:pam
-AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-groups=${var.ssh_group_name} %u
+AuthorizedKeysCommand /opt/bin/bastrd authorized-keys --allowed-group=${var.ssh_group_name} %u
 AuthorizedKeysCommandUser nobody
 ChallengeResponseAuthentication yes
 ClientAliveInterval 30
