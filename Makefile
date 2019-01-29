@@ -1,5 +1,5 @@
-CONTAINER_IMAGE ?= "rochacon/bastrd"
-CONTAINER_IMAGE_TOOLBOX ?= "rochacon/bastrd-toolbox"
+CONTAINER_IMAGE ?= "docker.io/rochacon/bastrd"
+CONTAINER_IMAGE_TOOLBOX ?= "docker.io/rochacon/bastrd-toolbox"
 VERSION ?= $$(git describe --abbrev=10 --always --dirty --tags)
 
 default: binary
