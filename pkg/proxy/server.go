@@ -10,10 +10,13 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rochacon/bastrd/pkg/auth"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/iam"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -21,15 +24,65 @@ import (
 // Server implements a simple reverse proxy server authenticating on AWS IAM
 type Server struct {
 	Addr              string
+	AllowedGroups     []string
+	IAM               *iam.IAM
 	SecretKey         []byte
 	SessionCookieName string
 	Upstream          *url.URL
 	upstreamProxy     *httputil.ReverseProxy
+	groupCache        map[string]*iam.GetGroupOutput
+	GroupCachePeriod  time.Duration
+	groupCacheMutex   *sync.RWMutex
+}
+
+// New instantiates a default server
+func New(addr string, secretKey []byte, upstream *url.URL) *Server {
+	s := &Server{
+		Addr:              addr,
+		SecretKey:         secretKey,
+		SessionCookieName: "sessionToken",
+		Upstream:          upstream,
+	}
+	s.groupCacheMutex = &sync.RWMutex{}
+	s.upstreamProxy = s.buildProxy()
+	return s
+}
+
+// groupCacheManager manages the allowed groups cache
+func (s *Server) groupCacheManager() error {
+	if s.groupCache == nil {
+		s.groupCache = map[string]*iam.GetGroupOutput{}
+	}
+	if len(s.AllowedGroups) == 0 {
+		return fmt.Errorf("empty list of allowed groups, disabling group cache")
+	}
+	err := make(chan error)
+	go func() {
+		for {
+			log.Printf("group cache sync started")
+			s.groupCacheMutex.Lock()
+			for _, group := range s.AllowedGroups {
+				grp, err := s.IAM.GetGroup(&iam.GetGroupInput{GroupName: aws.String(group)})
+				if err != nil {
+					log.Printf("failed to sync group %q: %s", group, err)
+					continue
+				}
+				s.groupCache[*grp.Group.GroupName] = grp
+			}
+			s.groupCacheMutex.Unlock()
+			log.Printf("group cache sync finished")
+			<-time.After(s.GroupCachePeriod)
+		}
+	}()
+	return <-err
 }
 
 // ListenAndServer starts the HTTP server.
 // This server respects SIGINT and will gracefully shutdown.
 func (s *Server) ListenAndServe() error {
+	go func() {
+		log.Printf("groupCacheManager exit: %s", s.groupCacheManager())
+	}()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.ServeHTTP)
 	mux.HandleFunc("/healthz", s.Health)
@@ -90,14 +143,11 @@ func (s *Server) Proxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	if s.upstreamProxy == nil {
-		s.setupProxy()
-	}
 	s.upstreamProxy.ServeHTTP(w, r)
 }
 
-// setup reverse proxy server
-func (s *Server) setupProxy() {
+// buildProxy sets up a simple reverse proxy server
+func (s *Server) buildProxy() *httputil.ReverseProxy {
 	// director based on httputil.NewSingleHostReverseProxy without path joining
 	// and dropping Authorization and Cookie headers
 	director := func(r *http.Request) {
@@ -115,7 +165,7 @@ func (s *Server) setupProxy() {
 			r.Header.Set("User-Agent", "")
 		}
 	}
-	s.upstreamProxy = &httputil.ReverseProxy{Director: director}
+	return &httputil.ReverseProxy{Director: director}
 }
 
 // login validates basic auth of username and secret+mfa on AWS IAM and sets cookie with session jwt
@@ -139,6 +189,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed authentication for %q: %s", username, err)
 		w.Header().Set("WWW-Authenticate", "Basic realm=\"Invalid credentials\"")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if s.userInAllowedGroups(username) == false {
+		log.Printf("Failed authentication for %q: user does not belong to allowed groups", username)
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	jwtToken, err := s.jwtNew(username, expiration)
@@ -206,4 +261,22 @@ func (s *Server) jwtParse(jwtToken string) (jwt.MapClaims, error) {
 		return nil, fmt.Errorf("Invalid token contents")
 	}
 	return claims, nil
+}
+
+// userInAllowedGroups checks wether the user belongs to the AllowedGroups
+// if allowed groups list is empty all users are allowed
+func (s *Server) userInAllowedGroups(username string) bool {
+	if len(s.AllowedGroups) == 0 {
+		return true
+	}
+	s.groupCacheMutex.RLock()
+	defer s.groupCacheMutex.RUnlock()
+	for _, group := range s.groupCache {
+		for _, user := range group.Users {
+			if *user.UserName == username {
+				return true
+			}
+		}
+	}
+	return false
 }

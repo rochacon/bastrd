@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"time"
 
 	"github.com/rochacon/bastrd/pkg/proxy"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/urfave/cli"
 )
 
@@ -15,6 +18,15 @@ var Proxy = cli.Command{
 	Usage:  "AWS IAM authenticated HTTP proxy.",
 	Action: proxyMain,
 	Flags: []cli.Flag{
+		cli.StringSliceFlag{
+			Name:  "allowed-groups",
+			Usage: "Comma separated list of AWS IAM Groups allowed to authenticate. (defaults to empty, which allows all)",
+		},
+		cli.DurationFlag{
+			Name:  "group-cache-period",
+			Usage: "Duration of the allowed group cache.",
+			Value: 5 * time.Minute,
+		},
 		cli.StringFlag{
 			Name:   "bind",
 			Usage:  "Address to listen for HTTP requests.",
@@ -50,16 +62,18 @@ func proxyMain(ctx *cli.Context) error {
 		return fmt.Errorf("Session cookie name cant be empty.")
 	}
 	upstreamUrl := ctx.String("upstream")
+	if upstreamUrl == "" {
+		return fmt.Errorf("Upstream URL is required.")
+	}
 	upstream, err := url.Parse(upstreamUrl)
 	if err != nil {
 		return fmt.Errorf("Could not parse upstream: %s", err)
 	}
-	log.Printf("Upstream: %s", upstream)
-	srv := &proxy.Server{
-		Addr:              ctx.String("bind"),
-		SecretKey:         []byte(secretKey),
-		SessionCookieName: sessionCookieName,
-		Upstream:          upstream,
-	}
+	log.Printf("Forwarding requests to: %s", upstream)
+	srv := proxy.New(ctx.String("bind"), []byte(secretKey), upstream)
+	srv.AllowedGroups = ctx.StringSlice("allowed-groups")
+	srv.GroupCachePeriod = ctx.Duration("group-cache-period")
+	srv.IAM = iam.New(session.New())
+	srv.SessionCookieName = sessionCookieName
 	return srv.ListenAndServe()
 }
