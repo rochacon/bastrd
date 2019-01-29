@@ -113,6 +113,7 @@ func ensureContainer(username, image, command string) error {
 		"--cap-drop=SETPCAP",
 		"--cap-drop=SETUID",
 		"--cap-drop=SYS_CHROOT",
+		"--env=AWS_DEFAULT_REGION",
 		"--env=HOME=" + usr.HomeDir(),
 		"--env=USER=" + usr.Username,
 		fmt.Sprintf("--mount=type=bind,source=/etc/group,destination=/etc/group,bind-propagation=rprivate,readonly"),
