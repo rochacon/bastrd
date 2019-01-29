@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/rochacon/bastrd/pkg/auth"
@@ -23,6 +24,7 @@ type Server struct {
 	SecretKey         []byte
 	SessionCookieName string
 	Upstream          *url.URL
+	upstreamProxy     *httputil.ReverseProxy
 }
 
 // ListenAndServer starts the HTTP server.
@@ -84,12 +86,36 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // proxy request to upstream with net/http/httputil.SingleHostReverseProxy
 func (s *Server) Proxy(w http.ResponseWriter, r *http.Request) {
-	p := httputil.NewSingleHostReverseProxy(s.Upstream)
-	url := r.URL
-	url.Host = s.Upstream.Host
-	defer r.Body.Close()
-	req, _ := http.NewRequest(r.Method, url.String(), r.Body)
-	p.ServeHTTP(w, req)
+	if strings.HasPrefix(r.URL.Path, s.Upstream.Path) == false {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if s.upstreamProxy == nil {
+		s.setupProxy()
+	}
+	s.upstreamProxy.ServeHTTP(w, r)
+}
+
+// setup reverse proxy server
+func (s *Server) setupProxy() {
+	// director based on httputil.NewSingleHostReverseProxy without path joining
+	// and dropping Authorization and Cookie headers
+	director := func(r *http.Request) {
+		r.URL.Scheme = s.Upstream.Scheme
+		r.URL.Host = s.Upstream.Host
+		if s.Upstream.RawQuery == "" || r.URL.RawQuery == "" {
+			r.URL.RawQuery = s.Upstream.RawQuery + r.URL.RawQuery
+		} else {
+			r.URL.RawQuery = s.Upstream.RawQuery + "&" + r.URL.RawQuery
+		}
+		r.Header.Del("Authorization")
+		r.Header.Del("Cookie")
+		if _, ok := r.Header["User-Agent"]; !ok {
+			// explicitly disable User-Agent so it's not set to default value
+			r.Header.Set("User-Agent", "")
+		}
+	}
+	s.upstreamProxy = &httputil.ReverseProxy{Director: director}
 }
 
 // login validates basic auth of username and secret+mfa on AWS IAM and sets cookie with session jwt
