@@ -19,7 +19,7 @@ const DOCKER = "/usr/bin/docker"
 
 var Toolbox = cli.Command{
 	Name:    "toolbox",
-	Usage:   "Validates MFA and open a new authenticated toolbox session.",
+	Usage:   "Open a new authenticated toolbox session.",
 	Action:  toolboxSessionMain,
 	Aliases: []string{"session"},
 	Flags: []cli.Flag{
@@ -27,23 +27,14 @@ var Toolbox = cli.Command{
 			Name:  "c",
 			Usage: "SSH command arguments.",
 		},
-		cli.Int64Flag{
-			Name:  "duration",
-			Usage: "Session credentials duration, in hours.",
-			Value: 4,
-		},
 		cli.StringFlag{
 			Name:  "image",
 			Usage: "Sandbox container image.",
 			Value: "docker.io/rochacon/bastrd-toolbox:latest",
 		},
 		cli.StringFlag{
-			Name:  "token",
-			Usage: "AWS IAM MFA token.",
-		},
-		cli.StringFlag{
 			Name:  "username",
-			Usage: "AWS IAM username for the sessioned.",
+			Usage: "AWS IAM username for the session.",
 		},
 	},
 }
@@ -53,7 +44,6 @@ var Toolbox = cli.Command{
 // 1. Container setup (this is skipped on session resume)
 // 2. Attach to container
 func toolboxSessionMain(ctx *cli.Context) (err error) {
-	// duration := ctx.Int64("duration")
 	image := ctx.String("image")
 	sshArgs := ctx.String("c")
 	username := ctx.String("username")
