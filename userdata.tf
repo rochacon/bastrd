@@ -1,18 +1,18 @@
 data "ignition_config" "userdata" {
   files = [
-    "${data.ignition_file.bastrd.id}",
-    "${data.ignition_file.bastrd_toolbox.id}",
-    "${data.ignition_file.pam_sshd.id}",
-    "${data.ignition_file.pam_sudo.id}",
-    "${data.ignition_file.sudoers.id}",
-    "${data.ignition_file.sshd_config.id}",
+    data.ignition_file.bastrd.rendered,
+    data.ignition_file.bastrd_toolbox.rendered,
+    data.ignition_file.pam_sshd.rendered,
+    data.ignition_file.pam_sudo.rendered,
+    data.ignition_file.sudoers.rendered,
+    data.ignition_file.sshd_config.rendered,
   ]
 
   systemd = [
-    "${data.ignition_systemd_unit.update-engine.id}",
-    "${data.ignition_systemd_unit.locksmithd.id}",
-    "${data.ignition_systemd_unit.docker_block_ec2_metadata.id}",
-    "${data.ignition_systemd_unit.bastrd_sync.id}",
+    data.ignition_systemd_unit.update-engine.rendered,
+    data.ignition_systemd_unit.locksmithd.rendered,
+    data.ignition_systemd_unit.docker_block_ec2_metadata.rendered,
+    data.ignition_systemd_unit.bastrd_sync.rendered,
   ]
 }
 
@@ -33,13 +33,14 @@ data "ignition_systemd_unit" "locksmithd" {
 data "ignition_systemd_unit" "docker_block_ec2_metadata" {
   name = "docker.service"
 
-  dropin = {
+  dropin {
     name = "10-block-ec2-metadata.conf"
 
     content = <<EOF
 [Service]
 ExecStartPost=/usr/sbin/iptables -I DOCKER-USER -i docker0 -d 169.254.169.254/32 -j REJECT
 EOF
+
   }
 }
 
@@ -47,7 +48,7 @@ EOF
 data "ignition_file" "sshd_config" {
   filesystem = "root"
   path       = "/etc/ssh/sshd_config"
-  mode       = 0600
+  mode       = 384
 
   content {
     content = <<EOF
@@ -68,6 +69,7 @@ PrintMotd no
 UseDNS no
 UsePAM yes
 EOF
+
   }
 }
 
@@ -75,7 +77,7 @@ EOF
 data "ignition_file" "bastrd" {
   filesystem = "root"
   path       = "/opt/bin/bastrd"
-  mode       = 0755
+  mode       = 493
 
   source {
     // FIXME add sha256 integrity check and download from GitHub release
@@ -88,7 +90,7 @@ data "ignition_file" "bastrd" {
 data "ignition_file" "bastrd_toolbox" {
   filesystem = "root"
   path       = "/opt/bin/bastrd-toolbox"
-  mode       = 0755
+  mode       = 493
 
   content {
     content = <<EOF
@@ -96,6 +98,7 @@ data "ignition_file" "bastrd_toolbox" {
 export AWS_DEFAULT_REGION="${var.region}"
 /opt/bin/bastrd toolbox --image=${var.toolbox_image} --username=$${USER} "$${@}"
 EOF
+
   }
 }
 
@@ -117,13 +120,14 @@ ExecStart=/opt/bin/bastrd sync --interval=1m --group=${var.ssh_group_name}
 [Install]
 WantedBy=multi-user.target
 EOF
+
 }
 
 // bastrd integration with pam for password check against AWS IAM
 data "ignition_file" "pam_sshd" {
   filesystem = "root"
   path       = "/etc/pam.d/sshd"
-  mode       = 0600
+  mode       = 384
 
   content {
     content = <<EOF
@@ -141,13 +145,14 @@ session   required    pam_unix.so
 session   optional    pam_permit.so
 -session  optional    pam_systemd.so
 EOF
+
   }
 }
 
 data "ignition_file" "pam_sudo" {
   filesystem = "root"
   path       = "/etc/pam.d/sudo"
-  mode       = 0600
+  mode       = 384
 
   content {
     content = <<EOF
@@ -165,13 +170,14 @@ session   required    pam_unix.so
 session   optional    pam_permit.so
 -session  optional    pam_systemd.so
 EOF
+
   }
 }
 
 data "ignition_file" "sudoers" {
   filesystem = "root"
   path       = "/etc/sudoers.d/default"
-  mode       = 0600
+  mode       = 384
 
   content {
     content = <<EOF
@@ -184,5 +190,6 @@ Defaults env_keep += "LESSCHARSET"
 root ALL=(ALL) ALL
 %${var.ssh_group_name} ALL=(ALL) ALL
 EOF
+
   }
 }
