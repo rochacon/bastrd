@@ -6,7 +6,8 @@ variable "az" {
   default = "us-east-1a"
 }
 
-variable "env" {}
+variable "env" {
+}
 
 variable "size" {
   default = "t3.nano"
@@ -17,7 +18,7 @@ variable "region" {
 }
 
 variable "ssh_allowed_cidrs" {
-  type = "list"
+  type = list(string)
 
   default = [
     "0.0.0.0/0",
@@ -29,7 +30,7 @@ variable "ssh_group_name" {
 }
 
 variable "ssh_users" {
-  type    = "list"
+  type    = list(string)
   default = []
 }
 
@@ -38,18 +39,15 @@ variable "toolbox_image" {
 }
 
 provider "aws" {
-  region = "${var.region}"
+  region = var.region
 }
 
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+}
 
 data "aws_ami" "coreos" {
   most_recent = true
-
-  filter {
-    name   = "owner-id"
-    values = ["595879546273"]
-  }
+  owners = ["595879546273"]
 
   filter {
     name   = "name"
@@ -70,21 +68,16 @@ data "aws_ami" "coreos" {
 data "aws_vpc" "vpc" {
   filter {
     name   = "tag:Env"
-    values = ["${var.env}"]
+    values = [var.env]
   }
 }
 
-data "aws_subnet_ids" "public" {
-  vpc_id = "${data.aws_vpc.vpc.id}"
+data "aws_subnet" "public" {
+  vpc_id = data.aws_vpc.vpc.id
 
-  filter {
-    name   = "availabilityZone"
-    values = ["${var.az}"]
-  }
-
-  filter {
-    name   = "tag:Tier"
-    values = ["public"]
+  availability_zone = var.az
+  tags = {
+    Tier = "public"
   }
 }
 
@@ -103,37 +96,37 @@ resource "aws_security_group" "bastrd" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["${var.ssh_allowed_cidrs}"]
+    cidr_blocks = var.ssh_allowed_cidrs
   }
 
   lifecycle {
     create_before_destroy = true
   }
 
-  tags {
+  tags = {
     Name = "${var.env}-${var.name}-bastrd-sg"
     App  = "${var.name}-bastrd"
-    Env  = "${var.env}"
+    Env  = var.env
   }
 
-  vpc_id = "${data.aws_vpc.vpc.id}"
+  vpc_id = data.aws_vpc.vpc.id
 }
 
 resource "aws_instance" "bastrd" {
-  ami                    = "${data.aws_ami.coreos.id}"
-  instance_type          = "${var.size}"
-  iam_instance_profile   = "${aws_iam_instance_profile.bastrd.id}"
-  subnet_id              = "${data.aws_subnet_ids.public.ids[0]}"
-  user_data              = "${data.ignition_config.userdata.rendered}"
-  vpc_security_group_ids = ["${aws_security_group.bastrd.id}"]
+  ami                    = data.aws_ami.coreos.id
+  instance_type          = var.size
+  iam_instance_profile   = aws_iam_instance_profile.bastrd.id
+  subnet_id              = data.aws_subnet.public.id
+  user_data              = data.ignition_config.userdata.rendered
+  vpc_security_group_ids = [aws_security_group.bastrd.id]
 
   // FIXME remove this
-  key_name = "${var.name}"
+  key_name = var.name
 
-  tags {
+  tags = {
     Name = "${var.env}-${var.name}-bastrd"
     App  = "${var.name}-bastrd"
-    Env  = "${var.env}"
+    Env  = var.env
   }
 }
 
@@ -154,12 +147,13 @@ resource "aws_iam_role" "bastrd" {
     ]
 }
 EOF
+
 }
 
 resource "aws_iam_role_policy" "bastrd" {
   name   = "${var.env}-bastrd"
-  role   = "${aws_iam_role.bastrd.id}"
-  policy = "${data.template_file.bastrd_policy.rendered}"
+  role   = aws_iam_role.bastrd.id
+  policy = data.template_file.bastrd_policy.rendered
 }
 
 data "template_file" "bastrd_policy" {
@@ -183,17 +177,18 @@ data "template_file" "bastrd_policy" {
   ]
 }
 EOF
+
 }
 
 resource "aws_iam_instance_profile" "bastrd" {
   name = "${var.env}-bastrd"
-  role = "${aws_iam_role.bastrd.name}"
+  role = aws_iam_role.bastrd.name
 }
 
 output "ip" {
-  value = "${aws_instance.bastrd.public_ip}"
+  value = aws_instance.bastrd.public_ip
 }
 
 output "private_ip" {
-  value = "${aws_instance.bastrd.private_ip}"
+  value = aws_instance.bastrd.private_ip
 }
